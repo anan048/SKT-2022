@@ -24,7 +24,7 @@ var app bool = false
 var jumlahanggota float64 = 1
 
 func append(peerAddress string, state int) {
-	a += 1
+	
 	client, err := rpc.DialHTTP("tcp", peerAddress)
 	handleConnError(err, peerAddress, state)
 
@@ -37,7 +37,7 @@ func append(peerAddress string, state int) {
 		result := localResult
 		if result == true {
 
-			time.Sleep(1 * time.Second)
+			a += 1
 
 		}
 
@@ -52,6 +52,9 @@ func leader(peerAddress map[int]string) {
 
 		for i := 0; i < len(os.Args)-2; i++ {
 			go append(peerAddress[i], state)
+			if i == len(os.Args)-3 {
+				append(peerAddress[i], state)
+			}
 		}
 		if a >= len(peerAddress) {
 			time.Sleep(10 * time.Second)
