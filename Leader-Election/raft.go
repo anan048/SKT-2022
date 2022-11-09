@@ -19,63 +19,83 @@ type Raft struct {
 var vote float64 = 0
 var timer int
 var term int = 0
+var a int = 0
 var app bool = false
 var jumlahanggota float64 = 1
 
-func append(peerAddress string, state int) bool {
+func append(peerAddress string, state int) {
+	a += 1
 	client, err := rpc.DialHTTP("tcp", peerAddress)
 	handleConnError(err, peerAddress, state)
-	clientargs := term
-	var localResult bool
-	err = client.Call("Raft.AppendEntries", clientargs, &localResult)
-	handleConnError(err, peerAddress, state)
-	return localResult
+
+	if err == nil {
+
+		clientargs := term
+		var localResult bool
+		err = client.Call("Raft.AppendEntries", clientargs, &localResult)
+		handleConnError(err, peerAddress, state)
+		result := localResult
+		if result == true {
+
+			time.Sleep(1 * time.Second)
+
+		}
+
+	}
+
 }
 
 func leader(peerAddress map[int]string) {
-	var result bool
 	state := 2
-	fmt.Printf("jadi leader. term: %d", term)
+	fmt.Printf("jadi leader. term: %d\n", term)
 	for true {
+
 		for i := 0; i < len(os.Args)-2; i++ {
-			result = append(peerAddress[i], state)
+			go append(peerAddress[i], state)
 		}
-		if result == true {
+		if a >= len(peerAddress) {
 			time.Sleep(10 * time.Second)
-		} else {
-			leader(peerAddress)
+			a = 0
 		}
 
 	}
 }
 
-func voting(peerAddress string, state int) bool {
+func voting(peerAddress string, state int) {
 	client, err := rpc.DialHTTP("tcp", peerAddress)
 	handleConnError(err, peerAddress, state)
-	clientargs := ""
-	var localResult bool
-	err = client.Call("Raft.RequestVote", clientargs, &localResult)
-	handleConnError(err, peerAddress, state)
-	return localResult
+	if err == nil {
+		clientargs := ""
+		var localResult bool
+		err = client.Call("Raft.RequestVote", clientargs, &localResult)
+		handleConnError(err, peerAddress, state)
+		result := localResult
+		if err != nil {
+			jumlahanggota += 1
+			result = false
+		}
+		if result == true && err == nil {
+			jumlahanggota += 1
+			vote += 1
+		}
+	}
+
 }
 
 func candidate(peerAddress map[int]string) {
-	var result bool
 	state := 1
 	for true {
 		fmt.Println("jadi candidate")
 		term += 1
 		vote += 1
 		for i := 0; i < len(os.Args)-2; i++ {
-			result = voting(peerAddress[i], state)
-			if result == true {
-				jumlahanggota += 1
-				vote += 1
-			}
+			voting(peerAddress[i], state)
 		}
 
 		if vote > 0.5*jumlahanggota {
 			leader(peerAddress)
+		} else {
+			follower(peerAddress)
 		}
 	}
 
@@ -87,7 +107,6 @@ func (t *Raft) RequestVote(empty string, result *bool) error {
 }
 
 func (t *Raft) AppendEntries(termm int, result *bool) error {
-	
 	term = termm
 	if term == termm {
 
@@ -96,6 +115,7 @@ func (t *Raft) AppendEntries(termm int, result *bool) error {
 	*result = true
 	return nil
 }
+
 
 func follower(peerAddress map[int]string) {
 	rand.Seed(time.Now().UnixNano())
@@ -120,7 +140,6 @@ func follower(peerAddress map[int]string) {
 func main() {
 	portNumber := os.Args[1]
 	var peersAddress = make(map[int]string)
-
 	for i := 0; i < len(os.Args)-2; i++ {
 		peersAddress[i] = os.Args[i+2]
 	}
@@ -149,21 +168,15 @@ func handleError(err error) {
 }
 
 func handleConnError(err error, peersAdrress string, state int) {
-	var a bool
 	if err != nil {
 		fmt.Println("Terdapat error : ", err.Error())
 
 		time.Sleep(5 * time.Second)
 		if state == 1 {
-			a = voting(peersAdrress, state)
-			if a == true {
-				fmt.Println("")
-			}
-		} else {
-			a = append(peersAdrress, state)
-			if a == true {
-				fmt.Println("")
-			}
+			voting(peersAdrress, state)
+
+		} else if state == 2 {
+			append(peersAdrress, state)
 		}
 
 	}
